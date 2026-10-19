@@ -26,16 +26,15 @@ export const siteConfig: SiteConfig = {
 		},
 	},
 
-	// Hero Banner 配置（ASCII Logo 交互式全屏横幅）
+	// Hero Banner 配置（像素哥特体全屏标题）
 	heroBanner: {
 		enable: true, // 是否在首页显示 Hero Banner
-		// ASCII Art 图案从 src/ascii-logo.txt 读取，无需在此配置
 		showScrollIndicator: true, // 是否显示向下滚动指示器
 	},
 
 	background: {
 		enable: true, // 是否启用背景图
-		src: "/imgs/startrain.gif",
+		src: "/imgs/pixel_sakura.gif",
 		position: "center", // 背景位置: 'top', 'center', 'bottom'
 		size: "cover", // 背景大小: 'cover', 'contain', 'auto'
 		repeat: "no-repeat", // 背景重复: 'no-repeat', 'repeat'

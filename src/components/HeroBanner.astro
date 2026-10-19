@@ -1,12 +1,5 @@
 ---
-/**
- * HeroBanner 组件 - ASCII Logo 交互式全屏横幅
- * 特点：直接渲染用户自定义的 ASCII Art 图案，鼠标滑过产生排斥效果
- */
 import { Icon } from "astro-icon/components";
-// 从 txt 文件读取 ASCII Art。桌面端横排、移动端竖排，避免被压缩
-import asciiLogoFile from "../ascii-logo.txt?raw";
-import asciiLogoMobileFile from "../ascii-logo-mobile.txt?raw";
 import { siteConfig } from "../config";
 
 interface Props {
@@ -14,434 +7,85 @@ interface Props {
 }
 
 const { class: className } = Astro.props;
-const heroBannerConfig = siteConfig.heroBanner;
-const showScrollIndicator = heroBannerConfig?.showScrollIndicator ?? true;
-
-const asciiLogoRaw: string =
-	heroBannerConfig?.asciiLogo || asciiLogoFile || siteConfig.title;
-// 移动端没有专门覆盖时，回退到桌面版本
-const asciiLogoMobileRaw: string = asciiLogoMobileFile || asciiLogoRaw;
+const showScrollIndicator = siteConfig.heroBanner?.showScrollIndicator ?? true;
 ---
 
-<section
-	id="hero-banner"
-	class:list={["hero-banner", className]}
-	data-ascii-logo={asciiLogoRaw}
-	data-ascii-logo-mobile={asciiLogoMobileRaw}
->
-	<!-- 背景层 -->
-	<div class="hero-bg">
-		<div class="hero-overlay"></div>
-	</div>
-
-	<!-- ASCII Logo Canvas -->
+<section id="hero-banner" class:list={["hero-banner", className]}>
 	<div class="hero-content">
-		<canvas id="ascii-canvas" class="ascii-canvas"></canvas>
+		<h1 class="hero-title" data-pagefind-ignore>{siteConfig.title}</h1>
 	</div>
 
-	<!-- 向下滚动指示器 -->
 	{showScrollIndicator && (
-		<div class="hero-scroll-indicator" id="scroll-indicator">
-			<div class="scroll-mouse">
-				<div class="scroll-wheel"></div>
-			</div>
+		<button
+			type="button"
+			class="hero-scroll-indicator"
+			id="scroll-indicator"
+			aria-label="向下滚动到文章"
+		>
+			<span class="scroll-mouse" aria-hidden="true">
+				<span class="scroll-wheel"></span>
+			</span>
 			<span class="scroll-text">向下滚动</span>
-			<Icon name="fa6-solid:chevron-down" class="scroll-arrow" />
-		</div>
+			<Icon name="fa6-solid:chevron-down" class="scroll-arrow" aria-hidden="true" />
+		</button>
 	)}
 </section>
 
 <script>
-	/**
-	 * ASCII Art 粒子系统
-	 * ASCII 仅作为形状蒙版，决定粒子位置；显示的字符替换为随机六十四卦
-	 * 鼠标排斥时小概率"重摇一卦"，呼应破碎/占卜的视觉气氛
-	 */
-	const HEXAGRAMS: readonly string[] = Array.from(
-		'䷀䷁䷂䷃䷄䷅䷆䷇䷈䷉䷊䷋䷌䷍䷎䷏䷐䷑䷒䷓䷔䷕䷖䷗䷘䷙䷚䷛䷜䷝䷞䷟䷠䷡䷢䷣䷤䷥䷦䷧䷨䷩䷪䷫䷬䷭䷮䷯䷰䷱䷲䷳䷴䷵䷶䷷䷸䷹䷺䷻䷼䷽䷾䷿'
-	);
-	const randomHex = (): string =>
-		HEXAGRAMS[(Math.random() * HEXAGRAMS.length) | 0];
+	// 使用事件委托，让 Swup 替换页面后新出现的按钮也能直接使用。
+	document.addEventListener("click", (event) => {
+		if (!(event.target instanceof Element)) return;
+		const indicator = event.target.closest("#scroll-indicator");
+		const banner = indicator?.closest(".hero-banner");
+		if (!banner) return;
 
-	class AsciiLogoSystem {
-		private canvas: HTMLCanvasElement | null = null;
-		private ctx: CanvasRenderingContext2D | null = null;
-		private particles: AsciiParticle[] = [];
-		private mouse = { x: -9999, y: -9999 };
-		private animationId: number = 0;
-		private isVisible: boolean = true;
-		private isDestroyed: boolean = false;
-		private resizeHandler: () => void = () => {};
-		private mouseMoveHandler: (e: MouseEvent) => void = () => {};
-		private mouseLeaveHandler: () => void = () => {};
-		private touchMoveHandler: (e: TouchEvent) => void = () => {};
-		private touchEndHandler: () => void = () => {};
-		private lines: string[] = [];
-		private linesProvider: () => string[] = () => [];
-		private dpr: number = 1;
-
-		constructor(canvasId: string, linesProvider: () => string[]) {
-			this.canvas = document.getElementById(canvasId) as HTMLCanvasElement;
-			this.linesProvider = linesProvider;
-			this.lines = linesProvider();
-
-			if (!this.canvas) return;
-
-			const ctx = this.canvas.getContext('2d', { alpha: true });
-			if (!ctx) return;
-			this.ctx = ctx;
-
-			this.dpr = Math.min(window.devicePixelRatio || 1, 2);
-
-			this.resizeHandler = () => {
-				// 视口变化时重新选择布局（桌面/移动），并重建粒子
-				this.lines = this.linesProvider();
-				this.resize();
-				this.createParticles();
-			};
-
-			this.mouseMoveHandler = (e: MouseEvent) => {
-				if (!this.canvas) return;
-				const rect = this.canvas.getBoundingClientRect();
-				this.mouse.x = (e.clientX - rect.left) * this.dpr;
-				this.mouse.y = (e.clientY - rect.top) * this.dpr;
-			};
-
-			this.mouseLeaveHandler = () => {
-				this.mouse.x = -9999;
-				this.mouse.y = -9999;
-			};
-
-			this.touchMoveHandler = (e: TouchEvent) => {
-				if (!this.canvas || e.touches.length === 0) return;
-				const rect = this.canvas.getBoundingClientRect();
-				this.mouse.x = (e.touches[0].clientX - rect.left) * this.dpr;
-				this.mouse.y = (e.touches[0].clientY - rect.top) * this.dpr;
-			};
-
-			this.touchEndHandler = () => {
-				this.mouse.x = -9999;
-				this.mouse.y = -9999;
-			};
-
-			this.resize();
-			this.createParticles();
-			this.bindEvents();
-			this.animate();
-
-			// 页面不可见时暂停动画
-			document.addEventListener('visibilitychange', () => {
-				this.isVisible = !document.hidden;
-				if (this.isVisible && !this.isDestroyed) this.animate();
-			});
-		}
-
-		private resize() {
-			if (!this.canvas) return;
-			const parent = this.canvas.parentElement;
-			if (!parent) return;
-			const w = parent.clientWidth;
-			const h = parent.clientHeight;
-			this.canvas.width = w * this.dpr;
-			this.canvas.height = h * this.dpr;
-			this.canvas.style.width = `${w}px`;
-			this.canvas.style.height = `${h}px`;
-		}
-
-		private createParticles() {
-			if (!this.canvas || !this.ctx) return;
-			this.particles = [];
-
-			const canvasW = this.canvas.width;
-			const canvasH = this.canvas.height;
-
-			if (this.lines.length === 0) return;
-
-			// 计算 ASCII Art 的行数和最大列数
-			const rows = this.lines.length;
-			const cols = Math.max(...this.lines.map(l => l.length));
-
-			if (rows === 0 || cols === 0) return;
-
-			// 自动计算字体大小，使 ASCII Art 适配 canvas
-			// 留出上下左右各 15% 的边距
-			const marginX = canvasW * 0.15;
-			const marginY = canvasH * 0.15;
-			const availW = canvasW - marginX * 2;
-			const availH = canvasH - marginY * 2;
-
-			// 卦象字符近似方形（CJK 全角），字符宽高比按 1.0 计算
-			const charAspect = 1.0;
-			// 根据可用空间计算字体大小
-			const fontSizeByWidth = availW / (cols * charAspect);
-			const fontSizeByHeight = availH / rows;
-			const fontSize = Math.min(fontSizeByWidth, fontSizeByHeight);
-
-			// 实际字符间距
-			const charW = fontSize * charAspect;
-			const charH = fontSize;
-
-			// 计算整个 ASCII Art 的实际宽高，用于居中
-			const totalW = cols * charW;
-			const totalH = rows * charH;
-			const offsetX = (canvasW - totalW) / 2;
-			const offsetY = (canvasH - totalH) / 2;
-
-			// 遍历每个字符，非空格字符创建粒子
-			for (let row = 0; row < rows; row++) {
-				const line = this.lines[row];
-				for (let col = 0; col < line.length; col++) {
-					const char = line[col];
-					if (char === ' ') continue; // 跳过空格
-
-					const x = offsetX + col * charW + charW / 2;
-					const y = offsetY + row * charH + charH / 2;
-
-					// 原 ASCII 中的"块字符"（█ ▄ ▀）位置作为主体保持高亮；
-					// "线框字符"（═ ║ ╔ ╗ etc.）位置弱化。这样虽然显示的都是
-					// 随机卦象，但 QusMarsh 的轮廓仍能从亮度对比中浮现出来
-					const isHeavy = char === '█' || char === '▄' || char === '▀';
-					const baseAlpha = isHeavy ? 0.92 : 0.62;
-					const alpha = baseAlpha + Math.random() * 0.08;
-
-					this.particles.push({
-						x: x,
-						y: y,
-						originX: x,
-						originY: y,
-						vx: 0,
-						vy: 0,
-						char: randomHex(),
-						fontSize: fontSize,
-						color: `rgba(255, 255, 255, ${alpha})`,
-					});
-				}
-			}
-		}
-
-		private bindEvents() {
-			window.addEventListener('resize', this.resizeHandler);
-
-			// 使用 hero-banner 容器监听事件
-			const heroBanner = document.getElementById('hero-banner');
-			const target = heroBanner || this.canvas;
-			if (target) {
-				target.addEventListener('mousemove', this.mouseMoveHandler);
-				target.addEventListener('mouseleave', this.mouseLeaveHandler);
-				target.addEventListener('touchmove', this.touchMoveHandler, { passive: true });
-				target.addEventListener('touchend', this.touchEndHandler);
-			}
-		}
-
-		private animate() {
-			if (!this.ctx || !this.canvas || !this.isVisible || this.isDestroyed) return;
-
-			const ctx = this.ctx;
-			const canvasW = this.canvas.width;
-			const canvasH = this.canvas.height;
-
-			ctx.clearRect(0, 0, canvasW, canvasH);
-
-			const mouseRadius = 80 * this.dpr; // 鼠标影响半径
-			const mouseRadiusSq = mouseRadius * mouseRadius;
-			const repulsionForce = 6; // 排斥力强度
-			const friction = 0.85; // 摩擦力
-			const returnSpeed = 0.08; // 回归速度
-
-			for (let i = 0; i < this.particles.length; i++) {
-				const p = this.particles[i];
-
-				// 鼠标排斥力
-				const dx = p.x - this.mouse.x;
-				const dy = p.y - this.mouse.y;
-				const distSq = dx * dx + dy * dy;
-
-				if (distSq < mouseRadiusSq && distSq > 0) {
-					const dist = Math.sqrt(distSq);
-					const force = (mouseRadius - dist) / mouseRadius * repulsionForce;
-					const angle = Math.atan2(dy, dx);
-					p.vx += Math.cos(angle) * force;
-					p.vy += Math.sin(angle) * force;
-					// 鼠标扰动时小概率"重摇一卦"，越靠近概率越高
-					const proximity = 1 - dist / mouseRadius;
-					if (Math.random() < 0.04 * proximity) {
-						p.char = randomHex();
-					}
-				}
-
-				// 回归原位的弹性力
-				p.vx += (p.originX - p.x) * returnSpeed;
-				p.vy += (p.originY - p.y) * returnSpeed;
-
-				// 摩擦力
-				p.vx *= friction;
-				p.vy *= friction;
-
-				// 更新位置
-				p.x += p.vx;
-				p.y += p.vy;
-
-				ctx.fillStyle = p.color;
-				// 六十四卦在 U+4DC0–U+4DFF（Yijing Hexagrams 区段），
-				// 多数等宽字体不含此区，需要回退到带符号 / CJK 的字体
-				ctx.font = `${p.fontSize}px ui-monospace, "Cascadia Code", "JetBrains Mono", "SF Mono", Menlo, Consolas, "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols 2", "PingFang SC", "Microsoft YaHei", monospace`;
-				ctx.textAlign = 'center';
-				ctx.textBaseline = 'middle';
-				ctx.fillText(p.char, p.x, p.y);
-			}
-
-			this.animationId = requestAnimationFrame(() => this.animate());
-		}
-
-		destroy() {
-			this.isDestroyed = true;
-			cancelAnimationFrame(this.animationId);
-			window.removeEventListener('resize', this.resizeHandler);
-
-			const heroBanner = document.getElementById('hero-banner');
-			const target = heroBanner || this.canvas;
-			if (target) {
-				target.removeEventListener('mousemove', this.mouseMoveHandler);
-				target.removeEventListener('mouseleave', this.mouseLeaveHandler);
-				target.removeEventListener('touchmove', this.touchMoveHandler);
-				target.removeEventListener('touchend', this.touchEndHandler);
-			}
-		}
-	}
-
-	interface AsciiParticle {
-		x: number;
-		y: number;
-		originX: number;
-		originY: number;
-		vx: number;
-		vy: number;
-		char: string;
-		fontSize: number;
-		color: string;
-	}
-
-	// 滚动到内容区域
-	function scrollToContent() {
-		const banner = document.getElementById('hero-banner');
-		if (banner) {
-			const bannerHeight = banner.offsetHeight;
-			window.scrollTo({
-				top: bannerHeight - 80,
-				behavior: 'smooth'
-			});
-		}
-	}
-
-	// 防止重复初始化
-	let asciiLogoInstance: AsciiLogoSystem | null = null;
-
-	function initHeroBanner() {
-		const heroBanner = document.getElementById('hero-banner');
-		if (!heroBanner || heroBanner.classList.contains('hidden')) {
-			cleanupInstances();
-			return;
-		}
-
-		cleanupInstances();
-
-		const asciiCanvas = document.getElementById('ascii-canvas') as HTMLCanvasElement;
-		if (asciiCanvas) {
-			// 从 DOM data 属性读取桌面 / 移动两套 ASCII Art（兼容 Swup 页面切换）
-			const rawDesktop: string =
-				heroBanner.getAttribute('data-ascii-logo') || 'QusMarsh';
-			const rawMobile: string =
-				heroBanner.getAttribute('data-ascii-logo-mobile') || rawDesktop;
-
-			const parseLines = (raw: string): string[] =>
-				raw.split('\n').filter((l: string) => l.trimEnd().length > 0);
-
-			const desktopLines = parseLines(rawDesktop);
-			const mobileLines = parseLines(rawMobile);
-
-			// 用 matchMedia 判定窄屏：避免被 ScrollBar 等边缘像素抖动反复触发
-			const mql = window.matchMedia('(max-width: 640px)');
-			const linesProvider = (): string[] =>
-				mql.matches ? mobileLines : desktopLines;
-
-			asciiLogoInstance = new AsciiLogoSystem('ascii-canvas', linesProvider);
-		}
-
-		const scrollIndicator = document.getElementById('scroll-indicator');
-		if (scrollIndicator) {
-			scrollIndicator.removeEventListener('click', scrollToContent);
-			scrollIndicator.addEventListener('click', scrollToContent);
-		}
-	}
-
-	function cleanupInstances() {
-		if (asciiLogoInstance) {
-			asciiLogoInstance.destroy();
-			asciiLogoInstance = null;
-		}
-	}
-
-	if (document.readyState === 'loading') {
-		document.addEventListener('DOMContentLoaded', initHeroBanner);
-	} else {
-		initHeroBanner();
-	}
-
-	if ((window as any).swup) {
-		(window as any).swup.hooks.on('page:view', initHeroBanner);
-	} else {
-		document.addEventListener('swup:enable', () => {
-			(window as any).swup.hooks.on('page:view', initHeroBanner);
+		window.scrollTo({
+			top: window.scrollY + banner.getBoundingClientRect().bottom - 80,
+			behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+				? "auto"
+				: "smooth",
 		});
-	}
+	});
 </script>
 
 <style>
+	@font-face {
+		font-family: "Jacquard 24";
+		src: url("../assets/fonts/jacquard-24/jacquard-24-latin.woff2") format("woff2");
+		font-style: normal;
+		font-weight: 400;
+		font-display: swap;
+	}
+
 	.hero-banner {
+		color: #273c4b;
 		position: relative;
 		width: 100%;
 		height: 100vh;
 		min-height: 600px;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
 		overflow: hidden;
 	}
 
-	/* 背景层 */
-	.hero-bg {
-		position: absolute;
-		inset: 0;
-		z-index: 0;
-	}
-
-	/* 遮罩层 - 全透明 */
-	.hero-overlay {
-		position: absolute;
-		inset: 0;
-		z-index: 1;
-		background: rgba(0, 0, 0, 0);
-	}
-
-	/* 主要内容 - 包裹 canvas */
 	.hero-content {
-		position: relative;
-		z-index: 10;
+		display: grid;
+		place-items: center;
 		width: 100%;
 		height: 100%;
-		display: flex;
-		align-items: center;
-		justify-content: center;
+		padding: 2rem 1.25rem;
 	}
 
-	.ascii-canvas {
-		width: 100%;
-		height: 100%;
-		cursor: default;
+	.hero-title {
+		margin: 0;
+		font-family: "Jacquard 24", Georgia, serif;
+		font-size: clamp(4.5rem, 15vw, 12rem);
+		font-weight: 400;
+		line-height: 1.15;
+		letter-spacing: 0.02em;
+		text-align: center;
+		white-space: nowrap;
+		text-shadow: 2px 2px 0 rgba(255, 255, 255, 0.9);
 	}
 
-	/* 向下滚动指示器 */
 	.hero-scroll-indicator {
 		position: absolute;
 		bottom: 2rem;
@@ -451,9 +95,19 @@ const asciiLogoMobileRaw: string = asciiLogoMobileFile || asciiLogoRaw;
 		flex-direction: column;
 		align-items: center;
 		gap: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		border: 1px solid rgba(255, 255, 255, 0.65);
+		border-radius: 1rem;
+		color: inherit;
+		font: inherit;
+		background: rgba(246, 249, 250, 0.85);
 		cursor: pointer;
 		animation: floatUp 2s ease-in-out infinite;
-		z-index: 10;
+	}
+
+	.hero-scroll-indicator:focus-visible {
+		outline: 2px solid currentColor;
+		outline-offset: 4px;
 	}
 
 	@keyframes floatUp {
@@ -464,7 +118,7 @@ const asciiLogoMobileRaw: string = asciiLogoMobileFile || asciiLogoRaw;
 	.scroll-mouse {
 		width: 24px;
 		height: 38px;
-		border: 2px solid rgba(255, 255, 255, 0.7);
+		border: 2px solid currentColor;
 		border-radius: 12px;
 		position: relative;
 	}
@@ -476,17 +130,17 @@ const asciiLogoMobileRaw: string = asciiLogoMobileFile || asciiLogoRaw;
 		transform: translateX(-50%);
 		width: 4px;
 		height: 8px;
-		background: rgba(255, 255, 255, 0.8);
+		background: currentColor;
 		border-radius: 2px;
 		animation: scrollWheel 1.5s ease-in-out infinite;
 	}
 
 	@keyframes scrollWheel {
-		0%, 100% { 
+		0%, 100% {
 			opacity: 1;
 			transform: translateX(-50%) translateY(0);
 		}
-		50% { 
+		50% {
 			opacity: 0.5;
 			transform: translateX(-50%) translateY(8px);
 		}
@@ -494,12 +148,10 @@ const asciiLogoMobileRaw: string = asciiLogoMobileFile || asciiLogoRaw;
 
 	.scroll-text {
 		font-size: 0.75rem;
-		color: rgba(255, 255, 255, 0.7);
 		letter-spacing: 0.1em;
 	}
 
 	.scroll-arrow {
-		color: rgba(255, 255, 255, 0.7);
 		font-size: 0.875rem;
 		animation: arrowBounce 1.5s ease-in-out infinite;
 	}
@@ -512,6 +164,12 @@ const asciiLogoMobileRaw: string = asciiLogoMobileFile || asciiLogoRaw;
 	@media (max-width: 768px) {
 		.hero-scroll-indicator {
 			bottom: 1.5rem;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.hero-scroll-indicator, .scroll-wheel, .scroll-arrow {
+			animation: none;
 		}
 	}
 </style>
