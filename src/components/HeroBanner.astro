@@ -1,5 +1,4 @@
 ---
-import { Icon } from "astro-icon/components";
 import { siteConfig } from "../config";
 
 interface Props {
@@ -8,11 +7,14 @@ interface Props {
 
 const { class: className } = Astro.props;
 const showScrollIndicator = siteConfig.heroBanner?.showScrollIndicator ?? true;
+const titleParts = siteConfig.title.split(/(?<=[a-z0-9])(?=[A-Z])/);
 ---
 
 <section id="hero-banner" class:list={["hero-banner", className]}>
 	<div class="hero-content">
-		<h1 class="hero-title" data-pagefind-ignore>{siteConfig.title}</h1>
+		<h1 class="hero-title" aria-label={siteConfig.title} data-pagefind-ignore>
+			{titleParts.map((part) => <span class="hero-title-part">{part}</span>)}
+		</h1>
 	</div>
 
 	{showScrollIndicator && (
@@ -22,11 +24,21 @@ const showScrollIndicator = siteConfig.heroBanner?.showScrollIndicator ?? true;
 			id="scroll-indicator"
 			aria-label="向下滚动到文章"
 		>
-			<span class="scroll-mouse" aria-hidden="true">
-				<span class="scroll-wheel"></span>
-			</span>
-			<span class="scroll-text">向下滚动</span>
-			<Icon name="fa6-solid:chevron-down" class="scroll-arrow" aria-hidden="true" />
+			<!-- 像素风双箭头（11×11 像素网格），与像素哥特体标题和像素背景保持一致 -->
+			<svg
+				class="scroll-chevrons"
+				viewBox="0 0 11 11"
+				fill="currentColor"
+				shape-rendering="crispEdges"
+				aria-hidden="true"
+				focusable="false"
+			>
+				<path d="M0 0h2v1H0zM9 0h2v1H9zM1 1h2v1H1zM8 1h2v1H8zM2 2h2v1H2zM7 2h2v1H7zM3 3h2v1H3zM6 3h2v1H6zM4 4h3v1H4z" />
+				<path
+					class="scroll-chevron-tail"
+					d="M0 6h2v1H0zM9 6h2v1H9zM1 7h2v1H1zM8 7h2v1H8zM2 8h2v1H2zM7 8h2v1H7zM3 9h2v1H3zM6 9h2v1H6zM4 10h3v1H4z"
+				/>
+			</svg>
 		</button>
 	)}
 </section>
@@ -86,89 +98,121 @@ const showScrollIndicator = siteConfig.heroBanner?.showScrollIndicator ?? true;
 		text-shadow: 2px 2px 0 rgba(255, 255, 255, 0.9);
 	}
 
+	/* 去掉原来的白色卡片，只保留一个像素双箭头，颜色沿用标题的深蓝灰 */
 	.hero-scroll-indicator {
+		--px: 3px; /* 一个像素格的实际尺寸，保持整数以免边缘发虚 */
 		position: absolute;
 		bottom: 2rem;
 		left: 50%;
 		transform: translateX(-50%);
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.5rem 0.75rem;
-		border: 1px solid rgba(255, 255, 255, 0.65);
-		border-radius: 1rem;
+		display: grid;
+		place-items: center;
+		width: 3.25rem;
+		height: 3.25rem;
+		padding: 0;
+		border: 0;
+		border-radius: 0.5rem;
 		color: inherit;
-		font: inherit;
-		background: rgba(246, 249, 250, 0.85);
+		background: transparent;
 		cursor: pointer;
-		animation: floatUp 2s ease-in-out infinite;
+		-webkit-tap-highlight-color: transparent;
 	}
 
 	.hero-scroll-indicator:focus-visible {
 		outline: 2px solid currentColor;
-		outline-offset: 4px;
+		outline-offset: 2px;
 	}
 
-	@keyframes floatUp {
-		0%, 100% { transform: translateX(-50%) translateY(0); }
-		50% { transform: translateX(-50%) translateY(-10px); }
+	.scroll-chevrons {
+		width: calc(var(--px) * 11);
+		height: calc(var(--px) * 11);
+		/* 一格宽的白色像素描边，像游戏精灵一样在明暗交错的倒影上都能看清 */
+		filter: drop-shadow(var(--px) 0 0 #fff) drop-shadow(calc(var(--px) * -1) 0 0 #fff)
+			drop-shadow(0 var(--px) 0 #fff) drop-shadow(0 calc(var(--px) * -1) 0 #fff);
+		animation: pixelBob 1.2s infinite;
 	}
 
-	.scroll-mouse {
-		width: 24px;
-		height: 38px;
-		border: 2px solid currentColor;
-		border-radius: 12px;
-		position: relative;
+	.scroll-chevron-tail {
+		fill: #7d8f9c;
 	}
 
-	.scroll-wheel {
-		position: absolute;
-		left: 50%;
-		top: 8px;
-		transform: translateX(-50%);
-		width: 4px;
-		height: 8px;
-		background: currentColor;
-		border-radius: 2px;
-		animation: scrollWheel 1.5s ease-in-out infinite;
-	}
-
-	@keyframes scrollWheel {
-		0%, 100% {
-			opacity: 1;
-			transform: translateX(-50%) translateY(0);
+	/* 两帧上下跳动，类似 RPG 对话框里的“继续”光标 */
+	@keyframes pixelBob {
+		0% {
+			transform: translateY(0);
+			animation-timing-function: step-end;
 		}
 		50% {
-			opacity: 0.5;
-			transform: translateX(-50%) translateY(8px);
+			transform: translateY(var(--px));
+			animation-timing-function: step-end;
+		}
+		100% {
+			transform: translateY(0);
 		}
 	}
 
-	.scroll-text {
-		font-size: 0.75rem;
-		letter-spacing: 0.1em;
-	}
-
-	.scroll-arrow {
-		font-size: 0.875rem;
-		animation: arrowBounce 1.5s ease-in-out infinite;
-	}
-
-	@keyframes arrowBounce {
-		0%, 100% { transform: translateY(0); }
-		50% { transform: translateY(5px); }
+	/* 悬停/聚焦时停在“按下”那一帧 */
+	.hero-scroll-indicator:hover .scroll-chevrons,
+	.hero-scroll-indicator:focus-visible .scroll-chevrons {
+		animation: none;
+		transform: translateY(var(--px));
 	}
 
 	@media (max-width: 768px) {
 		.hero-scroll-indicator {
-			bottom: 1.5rem;
+			bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+		}
+	}
+
+	@media (max-width: 640px) {
+		.hero-banner {
+			height: 100svh;
+			min-height: 32rem;
+		}
+
+		.hero-content {
+			padding: 2rem 1.25rem 8.5rem;
+		}
+
+		.hero-title {
+			font-size: clamp(6rem, min(32vw, 24svh), 13rem);
+			line-height: 1.05;
+			letter-spacing: 0.015em;
+			white-space: normal;
+		}
+
+		.hero-title-part {
+			display: block;
+			white-space: nowrap;
+		}
+	}
+
+	@media (max-width: 960px) and (max-height: 480px) {
+		.hero-banner {
+			height: 100svh;
+			min-height: 0;
+		}
+
+		.hero-content {
+			padding: 1.5rem 1.25rem 5rem;
+		}
+
+		.hero-title {
+			font-size: clamp(4rem, min(15vw, 32svh), 7rem);
+			white-space: nowrap;
+		}
+
+		.hero-title-part {
+			display: inline;
+		}
+
+		.hero-scroll-indicator {
+			bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
 		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.hero-scroll-indicator, .scroll-wheel, .scroll-arrow {
+		.scroll-chevrons {
 			animation: none;
 		}
 	}
