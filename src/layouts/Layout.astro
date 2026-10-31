@@ -1,6 +1,9 @@
 ---
 import ConfigCarrier from "@components/ConfigCarrier.astro";
 import LoadingScreen from "@components/LoadingScreen.astro";
+import GlobalStyles from "@components/GlobalStyles.astro";
+import Wallpaper from "@components/Wallpaper.astro";
+import heroFont from "../assets/fonts/jacquard-24/jacquard-24-latin.woff2?url";
 import { profileConfig, siteConfig } from "@/config";
 import {
 	BANNER_HEIGHT,
@@ -11,7 +14,6 @@ import {
 import { defaultFavicons } from "../constants/icon";
 import type { Favicon } from "../types/config";
 import { pathsEqual, url } from "../utils/url-utils";
-import "katex/dist/katex.css";
 
 interface Props {
 	title?: string;
@@ -67,7 +69,7 @@ const bannerOffset =
 
 <!DOCTYPE html>
 <html lang={siteLang} class="bg-[var(--page-bg)] transition text-[14px] md:text-[16px]"
-	  data-overlayscrollbars-initialize
+	  data-wallpaper={siteConfig.background.enable || undefined}
 >
 	<head>
 
@@ -95,19 +97,8 @@ const bannerOffset =
 		<meta name="viewport" content="width=device-width" />
 		<meta name="generator" content={Astro.generator} />
 		
-		<!-- 霞鹜文楷 - 中文手写风格字体（优化加载性能） -->
-		<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-		<link rel="preload" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-screen-webfont@1.1.0/lxgwwenkaiscreen.woff2" as="font" type="font/woff2" crossorigin />
-		<!-- 异步加载字体CSS，避免阻塞渲染 -->
-		<link rel="preload" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-screen-webfont@1.1.0/style.css" as="style" onload="this.onload=null;this.rel='stylesheet'" />
-		<noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-screen-webfont@1.1.0/style.css" /></noscript>
-		<style>
-			/* 确保字体加载时显示回退字体，避免FOIT（Flash of Invisible Text）*/
-			@font-face {
-				font-family: 'LXGW WenKai Screen';
-				font-display: swap;
-			}
-		</style>
+		<GlobalStyles />
+		{siteConfig.heroBanner?.enable && <link rel="preload" href={heroFont} as="font" type="font/woff2" crossorigin />}
 		{favicons.map(favicon => (
 			<link rel="icon"
 				  href={favicon.src.startsWith('/') ? url(favicon.src) : favicon.src}
@@ -117,148 +108,40 @@ const bannerOffset =
 		))}
 
 		<!-- 初始化设置 -->
-		<script is:inline define:vars={{BANNER_HEIGHT_EXTEND, PAGE_WIDTH, configHue}}>
-			// 性能优化：批量读取CSS变量，避免多次getComputedStyle调用
-			(function() {
-				// 批量读取阶段
-				const computedStyle = getComputedStyle(document.documentElement);
-				const bgUrl = computedStyle.getPropertyValue('--bg-url').trim();
-				const bgEnable = computedStyle.getPropertyValue('--bg-enable').trim();
-				const hue = localStorage.getItem('hue') || configHue;
-				const viewportHeight = window.innerHeight;
-				
-				// 批量写入阶段（使用requestAnimationFrame避免强制同步布局）
-				requestAnimationFrame(() => {
-					// 加载色调设置
-					document.documentElement.style.setProperty('--hue', hue);
-
-					// 计算banner高度
-					let offset = Math.floor(viewportHeight * (BANNER_HEIGHT_EXTEND / 100));
-					offset = offset - offset % 4;
-					document.documentElement.style.setProperty('--banner-height-extend', `${offset}px`);
-				});
-
-				// 优化背景图加载 - 防止闪烁
-				if (bgUrl && bgUrl !== 'none' && bgEnable === '1') {
-					const urlMatch = bgUrl.match(/url\(["']?([^"')]+)["']?\)/);
-					if (urlMatch) {
-						let imageUrl = urlMatch[1];
-						
-						// 检测是否是随机API（每次返回不同图片的URL）
-						// 如果是随机API，使用sessionStorage缓存，避免每次重绘都请求新图片
-						const isRandomApi = imageUrl.includes('loliapi.com') || 
-						                    imageUrl.includes('api.') || 
-						                    imageUrl.includes('/random');
-						
-						if (isRandomApi) {
-							const cachedBg = sessionStorage.getItem('cached-bg-url');
-							const cachedBgTime = sessionStorage.getItem('cached-bg-time');
-							// 缓存有效期：1小时（解决30秒TTL问题）
-							const cacheMaxAge = 60 * 60 * 1000;
-							const isCacheValid = cachedBg && cachedBgTime && 
-								(Date.now() - parseInt(cachedBgTime, 10)) < cacheMaxAge;
-							
-							if (isCacheValid) {
-								// 使用缓存的图片URL
-								imageUrl = cachedBg;
-								document.documentElement.style.setProperty('--bg-url', `url("${imageUrl}")`);
-							}
-						}
-						
-						// 显示背景的通用函数
-						function showBackground() {
-							requestAnimationFrame(() => {
-								document.body.classList.add('bg-loaded');
-								document.documentElement.style.setProperty('--card-bg', 'var(--card-bg-transparent)');
-								document.documentElement.style.setProperty('--float-panel-bg', 'var(--float-panel-bg-transparent)');
-							});
-						}
-						
-						const img = new Image();
-						img.onload = function() {
-							// 如果是随机API，缓存实际加载的图片URL
-							if (isRandomApi && !sessionStorage.getItem('cached-bg-url')) {
-								sessionStorage.setItem('cached-bg-url', img.src);
-								sessionStorage.setItem('cached-bg-time', Date.now().toString());
-								document.documentElement.style.setProperty('--bg-url', `url("${img.src}")`);
-							}
-							showBackground();
-						};
-						img.onerror = function() {
-							console.warn('Background image failed to load');
-							// 清除可能损坏的缓存
-							sessionStorage.removeItem('cached-bg-url');
-							sessionStorage.removeItem('cached-bg-time');
-						};
-						img.src = imageUrl;
-						
-						// 超时处理：2秒后强制启用透明效果（缩短超时时间提升体验）
-						setTimeout(() => {
-							if (!document.body.classList.contains('bg-loaded')) {
-								showBackground();
-							}
-						}, 2000);
-					}
-				}
-			})();
+		<script is:inline define:vars={{BANNER_HEIGHT_EXTEND, configHue, fixedHue: siteConfig.themeColor.fixed}}>
+			let hue = configHue;
+			try { if (!fixedHue) hue = localStorage.getItem('hue') || configHue; } catch {}
+			document.documentElement.style.setProperty('--hue', hue);
+			let offset = Math.floor(window.innerHeight * BANNER_HEIGHT_EXTEND / 100);
+			document.documentElement.style.setProperty('--banner-height-extend', `${offset - offset % 4}px`);
 		</script>
 		<style define:vars={{
 			configHue,
 			'page-width': `${PAGE_WIDTH}rem`,
-			'bg-url': siteConfig.background?.src ? `url(${siteConfig.background.src})` : 'none',
-			'bg-enable': siteConfig.background?.enable ? '1' : '0',
-			'bg-position': siteConfig.background?.position || 'center',
-			'bg-size': siteConfig.background?.size || 'cover',
-			'bg-repeat': siteConfig.background?.repeat || 'no-repeat',
-			'bg-attachment': siteConfig.background?.attachment || 'fixed',
-			'bg-opacity': (siteConfig.background?.opacity || 0.3).toString()
+			'bg-url': siteConfig.background.src ? `url(${siteConfig.background.src})` : 'none',
+			'bg-enable': siteConfig.background.enable ? '1' : '0',
+			'bg-position': siteConfig.background.position,
+			'bg-size': siteConfig.background.size,
+			'bg-repeat': siteConfig.background.repeat,
+			'bg-opacity': siteConfig.background.opacity.toString(),
 		}}>
-			:root {
-				--bg-url: var(--bg-url);
-				--bg-enable: var(--bg-enable);
-				--bg-position: var(--bg-position);
-				--bg-size: var(--bg-size);
-				--bg-repeat: var(--bg-repeat);
-				--bg-attachment: var(--bg-attachment);
-				--bg-opacity: var(--bg-opacity);
+			html[data-wallpaper] {
+				--card-bg: var(--card-bg-transparent);
+				--float-panel-bg: var(--float-panel-bg-transparent);
 			}
-			
-			/* 背景图配置 - 优化渲染性能 */
 			body::before {
 				content: '';
 				position: fixed;
-				top: 0;
-				left: 0;
-				width: 100%;
+				inset: 0;
 				height: 100vh;
 				background-image: var(--bg-url);
 				background-position: var(--bg-position);
 				background-size: var(--bg-size);
 				background-repeat: var(--bg-repeat);
-				opacity: 0;
+				opacity: calc(var(--bg-opacity) * var(--bg-enable));
 				pointer-events: none;
 				z-index: -1;
-				/* 提前告知浏览器 opacity 会变化，避免闪烁 */
-				will-change: opacity;
-				/* 使用更平滑的过渡，避免 Chrome 闪屏 */
-				transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-				/* 强制创建独立合成层，避免重绘影响其他元素 */
-				transform: translate3d(0, 0, 0);
-				backface-visibility: hidden;
-				-webkit-backface-visibility: hidden;
-				/* 隔离重绘范围，防止 GIF 动画影响其他元素 */
-				contain: strict;
-				isolation: isolate;
-				/* 像素画保持锐利边缘，禁用浏览器默认的平滑缩放 */
 				image-rendering: pixelated;
-				image-rendering: -moz-crisp-edges; /* Firefox 旧版本 */
-				image-rendering: crisp-edges;
-			}
-			
-			body.bg-loaded::before {
-				opacity: calc(var(--bg-opacity) * var(--bg-enable));
-				/* 加载完成后移除 will-change 释放资源 */
-				will-change: auto;
 			}
 		</style>  <!-- defines global css variables. This will be applied to <html> <body> and some other elements idk why -->
 
@@ -273,10 +156,9 @@ const bannerOffset =
 		<link rel="alternate" type="application/rss+xml" title={profileConfig.name} href={`${Astro.site}rss.xml`}/>
 
 	</head>
-	<body class=" min-h-screen transition " class:list={[{"lg:is-home": isHomePage, "enable-banner": enableBanner}]}
-		  data-overlayscrollbars-initialize
-	>
+	<body class=" min-h-screen transition " class:list={[{"lg:is-home": isHomePage, "enable-banner": enableBanner}]}>
 		<LoadingScreen />
+		<Wallpaper />
 		<ConfigCarrier></ConfigCarrier>
 		<slot />
 
@@ -321,456 +203,5 @@ const bannerOffset =
 </style>
 
 <script>
-import 'overlayscrollbars/overlayscrollbars.css';
-import {
-	OverlayScrollbars,
-	// ScrollbarsHidingPlugin,
-	// SizeObserverPlugin,
-	// ClickScrollPlugin
-} from 'overlayscrollbars';
-import {getHue, setHue} from "../utils/setting-utils";
-import {pathsEqual, url} from "../utils/url-utils";
-import {
-	BANNER_HEIGHT,
-	BANNER_HEIGHT_HOME,
-	BANNER_HEIGHT_EXTEND,
-	MAIN_PANEL_OVERLAPS_BANNER_HEIGHT
-} from "../constants/constants";
-import { siteConfig } from '../config';
-
-/* Preload fonts */
-// (async function() {
-// 	try {
-// 		await Promise.all([
-// 			document.fonts.load("400 1em Roboto"),
-// 			document.fonts.load("700 1em Roboto"),
-// 		]);
-// 		document.body.classList.remove("hidden");
-// 	} catch (error) {
-// 		console.log("Failed to load fonts:", error);
-// 	}
-// })();
-
-/* TODO This is a temporary solution for style flicker issue when the transition is activated */
-/* issue link: https://github.com/withastro/astro/issues/8711, the solution get from here too */
-/* update: fixed in Astro 3.2.4 */
-/*
-function disableAnimation() {
-	const css = document.createElement('style')
-	css.appendChild(
-		document.createTextNode(
-			`*{
-              -webkit-transition:none!important;
-              -moz-transition:none!important;
-              -o-transition:none!important;
-              -ms-transition:none!important;
-              transition:none!important
-              }`
-		)
-	)
-	document.head.appendChild(css)
-
-	return () => {
-		// Force restyle
-		;(() => window.getComputedStyle(document.body))()
-
-		// Wait for next tick before removing
-		setTimeout(() => {
-			document.head.removeChild(css)
-		}, 1)
-	}
-}
-*/
-
-const bannerEnabled = !!document.getElementById('banner-wrapper')
-
-function setClickOutsideToClose(panel: string, ignores: string[]) {
-	document.addEventListener("click", event => {
-		let panelDom = document.getElementById(panel);
-		let tDom = event.target;
-		if (!(tDom instanceof Node)) return;		// Ensure the event target is an HTML Node
-		for (let ig of ignores) {
-			let ie = document.getElementById(ig)
-			if (ie == tDom || (ie?.contains(tDom))) {
-				return;
-			}
-		}
-		panelDom!.classList.add("float-panel-closed");
-	});
-}
-setClickOutsideToClose("display-setting", ["display-setting", "display-settings-switch"])
-setClickOutsideToClose("nav-menu-panel", ["nav-menu-panel", "nav-menu-switch"])
-setClickOutsideToClose("search-panel", ["search-panel", "search-bar", "search-switch"])
-
-
-// 主题切换功能已删除
-
-function loadHue() {
-	setHue(getHue())
-}
-
-function initCustomScrollbar() {
-	const bodyElement = document.querySelector('body');
-	if (!bodyElement) return;
-	OverlayScrollbars(
-		// docs say that a initialization to the body element would affect native functionality like window.scrollTo
-		// but just leave it here for now
-		{
-			target: bodyElement,
-			cancel: {
-				nativeScrollbarsOverlaid: true,    // don't initialize the overlay scrollbar if there is a native one
-			}
-		}, {
-		scrollbars: {
-			theme: 'scrollbar-base scrollbar-auto py-1',
-			autoHide: 'move',
-			autoHideDelay: 500,
-			autoHideSuspend: false,
-		},
-	});
-
-	const katexElements = document.querySelectorAll('.katex-display') as NodeListOf<HTMLElement>;
-
-	const katexObserverOptions = {
-		root: null,
-		rootMargin: '100px',
-		threshold: 0.1
-	};
-
-	const processKatexElement = (element: HTMLElement) => {
-		if (!element.parentNode) return;
-		if (element.hasAttribute('data-scrollbar-initialized')) return;
-
-		const container = document.createElement('div');
-		container.className = 'katex-display-container';
-		container.setAttribute('aria-label', 'scrollable container for formulas');
-
-		element.parentNode.insertBefore(container, element);
-		container.appendChild(element);
-
-		OverlayScrollbars(container, {
-			scrollbars: {
-				theme: 'scrollbar-base scrollbar-auto',
-				autoHide: 'leave',
-				autoHideDelay: 500,
-				autoHideSuspend: false
-			}
-		});
-
-		element.setAttribute('data-scrollbar-initialized', 'true');
-	};
-
-	const katexObserver = new IntersectionObserver((entries, observer) => {
-		entries.forEach(entry => {
-			if (entry.isIntersecting) {
-			processKatexElement(entry.target as HTMLElement);
-			observer.unobserve(entry.target);
-			}
-		});
-	}, katexObserverOptions);
-
-	katexElements.forEach(element => {
-		katexObserver.observe(element);
-	});
-}
-
-function showBanner() {
-	if (!siteConfig.banner.enable) return;
-
-	const banner = document.getElementById('banner');
-	if (!banner) {
-		console.error('Banner element not found');
-		return;
-	}
-
-	banner.classList.remove('opacity-0', 'scale-105');
-}
-
-function init() {
-	loadHue();
-	initCustomScrollbar();
-	showBanner();
-}
-
-/* Load settings when entering the site */
-init();
-
-const setup = () => {
-	// TODO: temp solution to change the height of the banner
-/*
-	window.swup.hooks.on('animation:out:start', () => {
-		const path = window.location.pathname
-		const body = document.querySelector('body')
-		if (path[path.length - 1] === '/' && !body.classList.contains('is-home')) {
-			body.classList.add('is-home')
-		} else if (path[path.length - 1] !== '/' && body.classList.contains('is-home')) {
-			body.classList.remove('is-home')
-		}
-	})
-*/
-	window.swup.hooks.on('link:click', () => {
-		// Remove the delay for the first time page load
-		document.documentElement.style.setProperty('--content-delay', '0ms')
-
-		// prevent elements from overlapping the navbar
-		if (!bannerEnabled) {
-			return
-		}
-		let threshold = window.innerHeight * (BANNER_HEIGHT / 100) - 72 - 16
-		let navbar = document.getElementById('navbar-wrapper')
-		if (!navbar || !document.body.classList.contains('lg:is-home')) {
-			return
-		}
-		if (document.body.scrollTop >= threshold || document.documentElement.scrollTop >= threshold) {
-			navbar.classList.add('navbar-hidden')
-		}
-	})
-	window.swup.hooks.on('content:replace', initCustomScrollbar)
-	window.swup.hooks.on('visit:start', (visit: {to: {url: string}}) => {
-		// change banner height immediately when a link is clicked
-		const bodyElement = document.querySelector('body')
-		if (pathsEqual(visit.to.url, url('/'))) {
-			bodyElement!.classList.add('lg:is-home');
-		} else {
-			bodyElement!.classList.remove('lg:is-home');
-		}
-
-		// increase the page height during page transition to prevent the scrolling animation from jumping
-		const heightExtend = document.getElementById('page-height-extend')
-		if (heightExtend) {
-			heightExtend.classList.remove('hidden')
-		}
-
-		// Hide the TOC while scrolling back to top
-		let toc = document.getElementById('toc-wrapper');
-		if (toc) {
-			toc.classList.add('toc-not-ready')
-		}
-	});
-	window.swup.hooks.on('page:view', () => {
-		// hide the temp high element when the transition is done
-		const heightExtend = document.getElementById('page-height-extend')
-		if (heightExtend) {
-			heightExtend.classList.remove('hidden')
-		}
-	});
-	// 记录页面切换前的滚动位置和 HeroBanner 高度
-	let scrollPositionBeforeTransition = 0;
-	let bannerHeightBeforeTransition = 0;
-	let wasInBannerArea = false;
-
-	// 获取当前滚动位置
-	function getCurrentScrollTop() {
-		const osInstance = OverlayScrollbars(document.body);
-		if (osInstance) {
-			const viewport = osInstance.elements().viewport;
-			if (viewport) {
-				return viewport.scrollTop;
-			}
-		}
-		return document.documentElement.scrollTop || document.body.scrollTop || window.scrollY;
-	}
-
-	// 设置滚动位置
-	function setScrollTop(value: number) {
-		const osInstance = OverlayScrollbars(document.body);
-		if (osInstance) {
-			const viewport = osInstance.elements().viewport;
-			if (viewport) {
-				viewport.scrollTop = value;
-				return;
-			}
-		}
-		document.documentElement.scrollTop = value;
-		document.body.scrollTop = value;
-		window.scrollTo(0, value);
-	}
-
-	// 在链接点击时记录当前位置
-	window.swup.hooks.on('link:click', () => {
-		const heroBanner = document.getElementById('hero-banner');
-		scrollPositionBeforeTransition = getCurrentScrollTop();
-		bannerHeightBeforeTransition = heroBanner?.offsetHeight || 0;
-		
-		// 判断是否在 HeroBanner 区域内
-		wasInBannerArea = scrollPositionBeforeTransition < (bannerHeightBeforeTransition - 80);
-	});
-
-	// 在新内容加载后根据之前位置决定滚动行为
-	window.swup.hooks.on('content:replace', () => {
-		requestAnimationFrame(() => {
-			const heroBanner = document.getElementById('hero-banner');
-			if (!heroBanner || heroBanner.classList.contains('hidden')) {
-				return;
-			}
-
-			const newBannerHeight = heroBanner.offsetHeight;
-			const contentAreaTop = newBannerHeight - 80;
-
-			if (wasInBannerArea) {
-				// 用户之前在 HeroBanner 区域内，保持相对位置
-				// 根据之前在 banner 中的相对位置，计算新位置
-				const relativePosition = scrollPositionBeforeTransition / bannerHeightBeforeTransition;
-				const newPosition = relativePosition * newBannerHeight;
-				setScrollTop(Math.min(newPosition, contentAreaTop));
-			} else {
-				// 用户之前已经在内容区域，滚动到新页面的内容区域顶部
-				setScrollTop(contentAreaTop);
-			}
-		});
-	});
-
-	window.swup.hooks.on('visit:end', (_visit: {to: {url: string}}) => {
-		setTimeout(() => {
-			const heightExtend = document.getElementById('page-height-extend')
-			if (heightExtend) {
-				heightExtend.classList.add('hidden')
-			}
-
-            // Just make the transition looks better
-            const toc = document.getElementById('toc-wrapper');
-            if (toc) {
-                toc.classList.remove('toc-not-ready')
-            }
-        }, 200)
-	});
-}
-if (window?.swup?.hooks) {
-	setup()
-} else {
-	document.addEventListener('swup:enable', setup)
-}
-
-let backToTopBtn = document.getElementById('back-to-top-btn');
-let toc = document.getElementById('toc-wrapper');
-let navbar = document.getElementById('navbar-wrapper')
-
-// 性能优化：使用节流和批量DOM操作避免Layout Thrashing
-let scrollTicking = false;
-function scrollFunction() {
-	if (scrollTicking) return;
-	scrollTicking = true;
-	
-	requestAnimationFrame(() => {
-		// 批量读取所有需要的布局属性（避免读写交错）
-		const scrollTop = document.body.scrollTop || document.documentElement.scrollTop;
-		const viewportHeight = window.innerHeight;
-		const viewportWidth = window.innerWidth;
-		const isHome = document.body.classList.contains('lg:is-home');
-		
-		// 预计算阈值
-		const bannerHeightPercent = (bannerEnabled && isHome && viewportWidth >= 1024) 
-			? BANNER_HEIGHT_HOME 
-			: BANNER_HEIGHT;
-		const bannerHeightPx = viewportHeight * (bannerHeightPercent / 100);
-		const NAVBAR_HEIGHT = 72;
-		const MAIN_PANEL_EXCESS_HEIGHT = MAIN_PANEL_OVERLAPS_BANNER_HEIGHT * 16;
-		const navbarThreshold = viewportHeight * (bannerHeightPercent / 100) - NAVBAR_HEIGHT - MAIN_PANEL_EXCESS_HEIGHT - 16;
-		
-		// 批量写入DOM（所有样式修改放在一起）
-		if (backToTopBtn) {
-			if (scrollTop > bannerHeightPx) {
-				backToTopBtn.classList.remove('hide');
-			} else {
-				backToTopBtn.classList.add('hide');
-			}
-		}
-
-		if (bannerEnabled && toc) {
-			if (scrollTop > bannerHeightPx) {
-				toc.classList.remove('toc-hide');
-			} else {
-				toc.classList.add('toc-hide');
-			}
-		}
-
-		if (bannerEnabled && navbar) {
-			if (scrollTop >= navbarThreshold) {
-				navbar.classList.add('navbar-hidden');
-			} else {
-				navbar.classList.remove('navbar-hidden');
-			}
-		}
-		
-		scrollTicking = false;
-	});
-}
-window.onscroll = scrollFunction
-
-// 性能优化：resize事件使用防抖
-let resizeTimeout: ReturnType<typeof setTimeout>;
-window.onresize = () => {
-	clearTimeout(resizeTimeout);
-	resizeTimeout = setTimeout(() => {
-		requestAnimationFrame(() => {
-			// calculate the --banner-height-extend, which needs to be a multiple of 4 to avoid blurry text
-			let offset = Math.floor(window.innerHeight * (BANNER_HEIGHT_EXTEND / 100));
-			offset = offset - offset % 4;
-			document.documentElement.style.setProperty('--banner-height-extend', `${offset}px`);
-		});
-	}, 100);
-}
-
-</script>
-
-<script>
-import PhotoSwipeLightbox from "photoswipe/lightbox"
-import "photoswipe/style.css"
-
-let lightbox: PhotoSwipeLightbox
-let pswp = import("photoswipe")
-
-function createPhotoSwipe() {
-	lightbox = new PhotoSwipeLightbox({
-		gallery: ".custom-md img, #post-cover img",
-		pswpModule: () => pswp,
-		closeSVG: '<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#ffffff"><path d="M480-424 284-228q-11 11-28 11t-28-11q-11-11-11-28t11-28l196-196-196-196q-11-11-11-28t11-28q11-11 28-11t28 11l196 196 196-196q11-11 28-11t28 11q11 11 11 28t-11 28L536-480l196 196q11 11 11 28t-11 28q-11 11-28 11t-28-11L480-424Z"/></svg>',
-		zoomSVG: '<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#ffffff"><path d="M340-540h-40q-17 0-28.5-11.5T260-580q0-17 11.5-28.5T300-620h40v-40q0-17 11.5-28.5T380-700q17 0 28.5 11.5T420-660v40h40q17 0 28.5 11.5T500-580q0 17-11.5 28.5T460-540h-40v40q0 17-11.5 28.5T380-460q-17 0-28.5-11.5T340-500v-40Zm40 220q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l224 224q11 11 11 28t-11 28q-11 11-28 11t-28-11L532-372q-30 24-69 38t-83 14Zm0-80q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z"/></svg>',
-		padding: { top: 20, bottom: 20, left: 20, right: 20 },
-		wheelToZoom: true,
-		arrowPrev: false,
-		arrowNext: false,
-		imageClickAction: 'close',
-		tapAction: 'close',
-		doubleTapAction: 'zoom',
-	})
-
-	lightbox.addFilter("domItemData", (itemData, element) => {
-		if (element instanceof HTMLImageElement) {
-			itemData.src = element.src
-
-			itemData.w = Number(element.naturalWidth || window.innerWidth)
-			itemData.h = Number(element.naturalHeight || window.innerHeight)
-
-			itemData.msrc = element.src
-		}
-
-		return itemData
-	})
-
-	lightbox.init()
-}
-
-const setup = () => {
-	if (!lightbox) {
-		createPhotoSwipe()
-	}
-	window.swup.hooks.on("page:view", () => {
-		createPhotoSwipe()
-	})
-
-	window.swup.hooks.on(
-		"content:replace",
-		() => {
-			lightbox?.destroy?.()
-		},
-		{ before: true },
-	)
-}
-
-if (window.swup) {
-	setup()
-} else {
-	document.addEventListener("swup:enable", setup)
-}
+import "../scripts/page-ui";
 </script>

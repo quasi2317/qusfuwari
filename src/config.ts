@@ -6,6 +6,8 @@ import type {
 	SiteConfig,
 } from "./types/config";
 import { LinkPreset } from "./types/config";
+import sakuraPoster from "./assets/images/pixel-sakura.webp";
+import sakuraAnimation from "./assets/images/pixel-sakura.gif";
 
 export const siteConfig: SiteConfig = {
 	title: "QusMarsh",
@@ -34,7 +36,8 @@ export const siteConfig: SiteConfig = {
 
 	background: {
 		enable: true, // 是否启用背景图
-		src: "/imgs/pixel_sakura.gif",
+		src: sakuraPoster.src,
+		animationSrc: sakuraAnimation.src, // 访客可按需开启动画，默认加载静态背景
 		position: "center", // 背景位置: 'top', 'center', 'bottom'
 		size: "cover", // 背景大小: 'cover', 'contain', 'auto'
 		repeat: "no-repeat", // 背景重复: 'no-repeat', 'repeat'

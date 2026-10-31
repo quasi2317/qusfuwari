@@ -11,6 +11,7 @@
     "astro": "astro",
     "type-check": "tsc --noEmit --isolatedDeclarations",
     "new-post": "node scripts/new-post.js",
+    "prepare-thumbnails": "node scripts/prepare-showcase-thumbnails.mjs",
     "format": "biome format --write ./src",
     "lint": "biome check --write ./src",
     "preinstall": "npx only-allow pnpm"
@@ -44,7 +45,6 @@
     "lucide-react": "^0.577.0",
     "markdown-it": "^14.1.1",
     "mdast-util-to-string": "^4.0.0",
-    "overlayscrollbars": "^2.13.0",
     "pagefind": "^1.4.0",
     "photoswipe": "^5.4.4",
     "react": "^19.2.7",

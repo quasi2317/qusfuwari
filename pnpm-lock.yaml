@@ -92,9 +92,6 @@ importers:
       mdast-util-to-string:
         specifier: ^4.0.0
         version: 4.0.0
-      overlayscrollbars:
-        specifier: ^2.13.0
-        version: 2.13.0
       pagefind:
         specifier: ^1.4.0
         version: 1.4.0
@@ -4308,9 +4305,6 @@ packages:
   opencollective-postinstall@2.0.3:
     resolution: {integrity: sha512-8AV/sCtuzUeTo8gQK5qDZzARrulB3egtLzFgteqB2tcT4Mw7B8Kt7JcDHmltjz6FOAHsvTevk70gZEbhM4ZS9Q==}
     hasBin: true
-
-  overlayscrollbars@2.13.0:
-    resolution: {integrity: sha512-uQGpLESrbFDLTWucWAKX9ceIANj7detMwH/2yJ315Llt72ZcWN3P6ckMotoqVv2Mk29R/pnhDtgYjy4K+kwAyQ==}
 
   own-keys@1.0.1:
     resolution: {integrity: sha512-qFOyK5PjiWZd+QQIh+1jhdb9LpxTF0qs7Pm8o5QHYZ0M3vKqSqzsZaEB6oWlxZ+q2sJBMI/Ktgd2N5ZwQoRHfg==}
@@ -11115,8 +11109,6 @@ snapshots:
       is-wsl: 2.2.0
 
   opencollective-postinstall@2.0.3: {}
-
-  overlayscrollbars@2.13.0: {}
 
   own-keys@1.0.1:
     dependencies:

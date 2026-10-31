@@ -27,7 +27,7 @@ import { remarkReadingTime } from "./src/plugins/remark-reading-time.mjs";
 
 // https://astro.build/config
 export default defineConfig({
-	site: "https://qusmarsh.wiki",
+	site: "https://www.qus.moe",
 	base: "/",
 	trailingSlash: "always",
 	integrations: [
@@ -64,6 +64,7 @@ export default defineConfig({
 					"book-2-outline-rounded",
 					"tag-rounded",
 					"keyboard-arrow-up-rounded",
+					"search",
 				],
 				"fa6-brands": [
 					"creative-commons",
@@ -183,6 +184,7 @@ export default defineConfig({
 	},
 	vite: {
 		build: {
+			assetsInlineLimit: 0,
 			rollupOptions: {
 				onwarn(warning, warn) {
 					// temporarily suppress this warning

@@ -284,46 +284,15 @@ const { pdfUrl } = Astro.props;
    * 优点：快速、不需要额外库、浏览器原生支持
    */
   
-  function initPdfLazyLoad() {
-    const containers = document.querySelectorAll('[data-pdf-lazy]');
-    
-    if (!containers.length) return;
-
-    containers.forEach((container: Element) => {
-      const loadButton = container.querySelector('.load-pdf-button');
-      const closeButton = container.querySelector('.close-pdf-button');
-      const pdfUrl = container.getAttribute('data-pdf-url');
-      
-      if (!pdfUrl) return;
-
-      // 点击按钮加载PDF
-      loadButton?.addEventListener('click', () => {
-        loadPdf(container as HTMLElement, pdfUrl);
-      });
-
-      // 点击关闭按钮收起PDF
-      closeButton?.addEventListener('click', () => {
-        closePdf(container as HTMLElement);
-      });
-
-      // 使用 Intersection Observer 自动加载（滚动到附近时）
-      const observer = new IntersectionObserver((entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting && !entry.target.hasAttribute('data-loaded')) {
-            // 注释掉自动加载，改为仅显示按钮
-            // 用户需要主动点击才加载，避免一次加载太多PDF
-            // loadPdf(entry.target as HTMLElement, pdfUrl);
-            // observer.unobserve(entry.target);
-          }
-        });
-      }, {
-        rootMargin: '200px',
-        threshold: 0
-      });
-
-      observer.observe(container);
-    });
-  }
+  document.addEventListener('click', (event) => {
+    if (!(event.target instanceof Element)) return;
+    const button = event.target.closest('.load-pdf-button, .close-pdf-button');
+    const container = button?.closest<HTMLElement>('[data-pdf-lazy]');
+    const pdfUrl = container?.dataset.pdfUrl;
+    if (!button || !container || !pdfUrl) return;
+    if (button.classList.contains('close-pdf-button')) closePdf(container);
+    else loadPdf(container, pdfUrl);
+  });
 
   function loadPdf(container: HTMLElement, pdfUrl: string) {
     if (container.hasAttribute('data-loaded')) return;
@@ -340,10 +309,6 @@ const { pdfUrl } = Astro.props;
     const placeholder = container.querySelector('.pdf-placeholder');
     if (placeholder) {
       container.insertBefore(iframe, placeholder);
-      // 稍等片刻后隐藏占位符，让iframe有时间加载
-      setTimeout(() => {
-        (placeholder as HTMLElement).style.display = 'none';
-      }, 100);
     } else {
       container.insertBefore(iframe, container.firstChild);
     }
@@ -359,14 +324,6 @@ const { pdfUrl } = Astro.props;
       iframe.remove();
     }
     
-    // 重新显示占位符
-    const placeholder = container.querySelector('.pdf-placeholder');
-    if (placeholder) {
-      (placeholder as HTMLElement).style.display = 'flex';
-    }
   }
 
-  // 页面加载和路由切换时初始化
-  document.addEventListener('astro:page-load', initPdfLazyLoad);
-  initPdfLazyLoad();
 </script>

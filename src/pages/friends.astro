@@ -18,7 +18,7 @@ import HomeLayout from "../layouts/HomeLayout.astro";
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {category.friends.map((f) => (
                             <a href={f.url} target="_blank" rel="noopener" class="card-base p-4 flex items-center gap-4 hover:scale-[1.01] transition">
-                                {f.avatar && <img src={f.avatar} alt={f.name} class="w-12 h-12 rounded-full object-cover" />}
+                                {f.avatar && <img src={f.avatar} alt={f.name} width="48" height="48" loading="lazy" decoding="async" class="w-12 h-12 rounded-full object-cover" />}
                                 <div class="flex-1">
                                     <div class="font-bold">{f.name}</div>
                                     {f.bio && <div class="text-sm opacity-70 mt-1">{f.bio}</div>}

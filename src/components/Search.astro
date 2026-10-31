@@ -1,0 +1,149 @@
+---
+import { Icon } from "astro-icon/components";
+import { i18n } from "../i18n/translation";
+import I18nKey from "../i18n/i18nKey";
+---
+
+<div id="search-bar" class="hidden lg:flex transition-all items-center h-11 mr-2 rounded-lg bg-black/[0.04] hover:bg-black/[0.06] focus-within:bg-black/[0.06]">
+	<Icon name="material-symbols:search" class="absolute text-[1.25rem] pointer-events-none ml-3 text-black/30" />
+	<label for="search-input-desktop" class="sr-only">搜索</label>
+	<input id="search-input-desktop" placeholder={i18n(I18nKey.search)} type="search" autocomplete="off" aria-label="搜索内容" aria-controls="search-panel" class="transition-all pl-10 text-sm bg-transparent outline-0 h-full w-40 focus:w-60 text-black/50" />
+</div>
+<button type="button" aria-label="Search Panel" aria-controls="search-panel" aria-expanded="false" id="search-switch" class="btn-plain scale-animation lg:!hidden rounded-lg w-11 h-11 active:scale-90">
+	<Icon name="material-symbols:search" class="text-[1.25rem]" />
+</button>
+<div id="search-panel" class="float-panel float-panel-closed search-panel absolute md:w-[30rem] top-20 left-4 md:left-[unset] right-4 shadow-2xl rounded-2xl p-2">
+	<div class="flex relative lg:hidden items-center h-11 rounded-xl bg-black/[0.04]">
+		<Icon name="material-symbols:search" class="absolute text-[1.25rem] pointer-events-none ml-3 text-black/30" />
+		<label for="search-input-mobile" class="sr-only">搜索</label>
+		<input id="search-input-mobile" placeholder={i18n(I18nKey.search)} type="search" autocomplete="off" aria-label="搜索内容" aria-controls="search-panel" class="pl-10 w-full h-full text-sm bg-transparent outline-0 text-black/50" />
+	</div>
+	<p id="search-status" class="px-3 py-2 text-sm text-black/50" aria-live="polite" hidden></p>
+	<div id="search-results"></div>
+</div>
+<template id="search-result-template">
+	<a class="block group rounded-xl px-3 py-2 hover:bg-[var(--btn-plain-bg-hover)] active:bg-[var(--btn-plain-bg-active)]">
+		<div data-title class="font-bold text-lg text-black/90 group-hover:text-[var(--primary)]"></div>
+		<div data-excerpt class="text-sm text-black/50"></div>
+	</a>
+</template>
+
+<script>
+	import type { SearchResult } from "../global";
+	import { url } from "../utils/url-utils";
+
+	type SearchIndex = {
+		options: (options: { excerptLength: number }) => Promise<void>;
+		search: (query: string) => Promise<{ results: Array<{ data: () => Promise<SearchResult> }> }>;
+	};
+	let indexPromise: Promise<SearchIndex> | undefined;
+	function loadIndex() {
+		if (!indexPromise) {
+			indexPromise = import(/* @vite-ignore */ url("/pagefind/pagefind.js"))
+				.then(async (index: SearchIndex) => {
+					await index.options({ excerptLength: 20 });
+					return index;
+				}).catch((error) => {
+					indexPromise = undefined;
+					throw error;
+				});
+		}
+		return indexPromise;
+	}
+
+	const panel = document.getElementById("search-panel")!;
+	const switchButton = document.getElementById("search-switch")!;
+	const status = document.getElementById("search-status")!;
+	const results = document.getElementById("search-results")!;
+	const template = document.getElementById("search-result-template") as HTMLTemplateElement;
+	const inputs = Array.from(document.querySelectorAll<HTMLInputElement>("#search-input-desktop, #search-input-mobile"));
+	let timer: ReturnType<typeof setTimeout>;
+	let generation = 0;
+
+	function showPanel(show: boolean) {
+		panel.classList.toggle("float-panel-closed", !show);
+		switchButton.setAttribute("aria-expanded", String(show));
+	}
+	function showStatus(text: string) {
+		status.textContent = text;
+		status.hidden = !text;
+	}
+	function appendExcerpt(target: Element, excerpt: string) {
+		const parsed = new DOMParser().parseFromString(excerpt, "text/html");
+		for (const node of parsed.body.childNodes) {
+			if (node instanceof Element && node.tagName === "MARK") {
+				const mark = document.createElement("mark");
+				mark.textContent = node.textContent;
+				target.append(mark);
+			} else {
+				target.append(document.createTextNode(node.textContent || ""));
+			}
+		}
+	}
+	async function search(query: string, request: number) {
+		showPanel(true);
+		showStatus("搜索中…");
+		try {
+			const index = await loadIndex();
+			if (request !== generation) return;
+			const response = await index.search(query);
+			if (request !== generation) return;
+			const matches = await Promise.all(response.results.slice(0, 10).map((item) => item.data()));
+			if (request !== generation) return;
+			const fragment = document.createDocumentFragment();
+			for (const match of matches) {
+				const link = template.content.firstElementChild!.cloneNode(true) as HTMLAnchorElement;
+				const destination = new URL(match.url, location.origin);
+				if (destination.origin !== location.origin) continue;
+				link.href = destination.href;
+				link.setAttribute("aria-label", `阅读文章: ${match.meta.title}`);
+				link.querySelector("[data-title]")!.textContent = match.meta.title;
+				appendExcerpt(link.querySelector("[data-excerpt]")!, match.excerpt);
+				fragment.append(link);
+			}
+			results.replaceChildren(fragment);
+			showStatus(matches.length ? "" : "没有找到相关文章");
+		} catch (error) {
+			if (request !== generation) return;
+			results.replaceChildren();
+			showStatus("搜索暂不可用，请稍后重试");
+			console.warn("Search unavailable", error);
+		}
+	}
+	for (const input of inputs) {
+		input.addEventListener("focus", () => { void loadIndex().catch(() => {}); });
+		input.addEventListener("input", () => {
+			const request = ++generation;
+			clearTimeout(timer);
+			for (const other of inputs) if (other !== input) other.value = input.value;
+			const query = input.value.trim();
+			if (!query) {
+				results.replaceChildren();
+				showStatus("");
+				if (input.id === "search-input-desktop") showPanel(false);
+				return;
+			}
+			timer = setTimeout(() => void search(query, request), 200);
+		});
+		input.addEventListener("keydown", (event) => {
+			if (event.key === "Escape") { generation++; clearTimeout(timer); showPanel(false); input.blur(); }
+		});
+	}
+	switchButton.addEventListener("click", () => {
+		const show = panel.classList.contains("float-panel-closed");
+		showPanel(show);
+		if (show) inputs.find((input) => input.id === "search-input-mobile")?.focus();
+		else { generation++; clearTimeout(timer); }
+	});
+	document.addEventListener("click", (event) => {
+		if (!(event.target instanceof Node)) return;
+		if (panel.contains(event.target) || switchButton.contains(event.target) || document.getElementById("search-bar")?.contains(event.target)) return;
+		generation++;
+		clearTimeout(timer);
+		showPanel(false);
+	});
+</script>
+
+<style>
+	.search-panel { max-height: calc(100svh - 100px); overflow-y: auto; }
+</style>

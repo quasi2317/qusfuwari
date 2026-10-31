@@ -1,0 +1,76 @@
+---
+import { siteConfig } from "../config";
+const background = siteConfig.background;
+---
+{background.enable && background.animationSrc && (
+	<button type="button" id="wallpaper-toggle" data-poster={background.src} data-animation={background.animationSrc} aria-pressed="false" aria-label="开启动画壁纸">开启动画</button>
+)}
+
+<script>
+	const button = document.getElementById("wallpaper-toggle") as HTMLButtonElement | null;
+	if (button) {
+		const control = button;
+		const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+		let enabled = false;
+		let ready = false;
+		let generation = 0;
+		function paint() {
+			const src = enabled && ready && !document.hidden ? control.dataset.animation! : control.dataset.poster!;
+			document.documentElement.style.setProperty("--bg-url", `url("${src}")`);
+			control.setAttribute("aria-pressed", String(enabled));
+			control.setAttribute("aria-label", enabled ? "关闭动画壁纸" : "开启动画壁纸");
+			control.textContent = enabled ? "关闭动画" : "开启动画";
+		}
+		async function setAnimation(value: boolean) {
+			const request = ++generation;
+			enabled = value;
+			if (value && !ready) {
+				control.disabled = true;
+				control.textContent = "加载动画…";
+				try {
+					await new Promise<void>((resolve, reject) => {
+						const image = new Image();
+						image.onload = () => resolve();
+						image.onerror = reject;
+						image.src = control.dataset.animation!;
+					});
+					if (request !== generation) return;
+					ready = true;
+				} catch {
+					if (request !== generation) return;
+					enabled = false;
+				} finally {
+					control.disabled = false;
+				}
+			}
+			if (request !== generation) return;
+			try { sessionStorage.setItem("wallpaper-motion", enabled ? "on" : "off"); } catch { /* Storage may be unavailable. */ }
+			paint();
+		}
+		control.addEventListener("click", () => void setAnimation(!enabled));
+		document.addEventListener("visibilitychange", paint);
+		reducedMotion.addEventListener("change", () => { if (reducedMotion.matches) void setAnimation(false); });
+		try {
+			if (!reducedMotion.matches && sessionStorage.getItem("wallpaper-motion") === "on") void setAnimation(true);
+		} catch { /* The static poster remains the default. */ }
+	}
+</script>
+
+<style>
+	#wallpaper-toggle {
+		position: fixed;
+		left: 1rem;
+		bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+		z-index: 40;
+		padding: 0.5rem 0.75rem;
+		border: 1px solid rgba(39, 60, 75, 0.18);
+		border-radius: 0.75rem;
+		background: rgba(246, 249, 250, 0.92);
+		color: #273c4b;
+		font: inherit;
+		font-size: 0.75rem;
+		cursor: pointer;
+	}
+	#wallpaper-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+	#wallpaper-toggle:disabled { cursor: progress; }
+</style>

@@ -4,7 +4,8 @@
 
 <div class="giscus-container" data-giscus>
   <div class="giscus-placeholder">
-    <div class="loading-text">评论区加载中...</div>
+    <button type="button" class="btn-regular rounded-lg px-4 py-2" data-load-comments>加载评论</button>
+    <p class="loading-text" role="status"></p>
   </div>
 </div>
 
@@ -19,6 +20,8 @@
 
   .giscus-placeholder {
     display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
     align-items: center;
     justify-content: center;
     padding: 3rem 0;
@@ -41,51 +44,71 @@
 </style>
 
 <script>
-  function initGiscus() {
-    const giscusContainers = document.querySelectorAll('[data-giscus]');
-    
-    if (!giscusContainers.length) return;
-
-    giscusContainers.forEach((container) => {
-      if (!container.hasAttribute('data-loaded')) {
-        container.setAttribute('data-loaded', 'true');
-        loadGiscus(container);
-      }
-    });
-  }
-
-  function loadGiscus(container: Element) {
-    // 移除占位符
-    const placeholder = container.querySelector('.giscus-placeholder');
-    
-    // 创建 Giscus 脚本
-    const script = document.createElement('script');
-    script.src = 'https://giscus.app/client.js';
-    script.setAttribute('data-repo', 'quasi2317/qusfuwari');
-    script.setAttribute('data-repo-id', 'R_kgDOQCpWGQ');
-    script.setAttribute('data-category', 'Announcements');
-    script.setAttribute('data-category-id', 'DIC_kwDOQCpWGc4Cx6QI');
-    script.setAttribute('data-mapping', 'pathname');
-    script.setAttribute('data-strict', '0');
-    script.setAttribute('data-reactions-enabled', '1');
-    script.setAttribute('data-emit-metadata', '0');
-    script.setAttribute('data-input-position', 'top');
-    script.setAttribute('data-theme', 'light_high_contrast');
-    script.setAttribute('data-lang', 'zh-CN');
-    script.setAttribute('crossorigin', 'anonymous');
-    script.async = true;
-
-    // 脚本加载后移除占位符
-    script.onload = () => {
-      if (placeholder) {
-        placeholder.remove();
-      }
+  let observer: IntersectionObserver | undefined;
+  function loadGiscus(container: HTMLElement) {
+    if (container.dataset.loaded || container.dataset.loading) return;
+    container.dataset.loading = "true";
+    const button = container.querySelector<HTMLButtonElement>("[data-load-comments]")!;
+    const status = container.querySelector<HTMLElement>('[role="status"]')!;
+    button.disabled = true;
+    status.textContent = "评论加载中…";
+    const script = document.createElement("script");
+    script.src = "https://giscus.app/client.js";
+    const attributes = {
+      "data-repo": "quasi2317/qusfuwari",
+      "data-repo-id": "R_kgDOQCpWGQ",
+      "data-category": "Announcements",
+      "data-category-id": "DIC_kwDOQCpWGc4Cx6QI",
+      "data-mapping": "pathname",
+      "data-strict": "0",
+      "data-reactions-enabled": "1",
+      "data-emit-metadata": "0",
+      "data-input-position": "top",
+      "data-theme": "light_high_contrast",
+      "data-lang": "zh-CN",
+      "crossorigin": "anonymous",
     };
-
-    container.appendChild(script);
+    for (const [key, value] of Object.entries(attributes)) script.setAttribute(key, value);
+    script.async = true;
+    script.onload = () => {
+      container.dataset.loaded = "true";
+      delete container.dataset.loading;
+    };
+    script.onerror = () => {
+      delete container.dataset.loading;
+      button.disabled = false;
+      status.textContent = "评论加载失败，点击重试";
+      script.remove();
+    };
+    container.append(script);
   }
-
-  // 页面加载和路由切换时初始化
-  document.addEventListener('astro:page-load', initGiscus);
+  function initGiscus() {
+    observer?.disconnect();
+    observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        observer?.unobserve(entry.target);
+        loadGiscus(entry.target as HTMLElement);
+      }
+    }, { rootMargin: "300px" });
+    for (const container of document.querySelectorAll<HTMLElement>("[data-giscus]")) {
+      if (container.dataset.loaded) continue;
+      const button = container.querySelector<HTMLButtonElement>("[data-load-comments]")!;
+      if (!container.dataset.bound) {
+        container.dataset.bound = "true";
+        button.addEventListener("click", () => loadGiscus(container));
+      }
+      observer.observe(container);
+    }
+  }
   initGiscus();
+  let bound = false;
+  function setup() {
+    if (bound || !window.swup?.hooks) return;
+    bound = true;
+    window.swup.hooks.on("visit:start", () => observer?.disconnect());
+    window.swup.hooks.on("page:view", initGiscus);
+  }
+  if (window.swup?.hooks) setup();
+  else document.addEventListener("swup:enable", setup, { once: true });
 </script>

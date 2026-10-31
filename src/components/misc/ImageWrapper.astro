@@ -38,12 +38,9 @@ const isLocal = !(
 );
 const isPublic = src.startsWith("/");
 
-// TODO temporary workaround for images dynamic import
-// https://github.com/withastro/astro/issues/3373
-// biome-ignore lint/suspicious/noImplicitAnyLet: <check later>
-let img;
+let img: ImageMetadata | undefined;
 if (isLocal) {
-	const files = import.meta.glob<ImageMetadata>("../../**", {
+	const files = import.meta.glob<ImageMetadata>("../../**/*.{jpg,jpeg,png,gif,webp,avif,svg}", {
 		import: "default",
 	});
 	let normalizedPath = path
@@ -51,7 +48,7 @@ if (isLocal) {
 		.replace(/\\/g, "/");
 	const file = files[normalizedPath];
 	if (!file) {
-		console.error(
+		throw new Error(
 			`\n[ERROR] Image file not found: ${normalizedPath.replace("../../", "src/")}`,
 		);
 	}
@@ -74,5 +71,5 @@ const imageStyle = `object-position: ${position}`;
 		loading={loading}
 		format="webp"
 	/>}
-    {!isLocal && <img src={isPublic ? url(src) : src} alt={alt || ""} class={imageClass} style={imageStyle} loading={loading}/>}
+    {!isLocal && <img src={isPublic ? url(src) : src} alt={alt || ""} width={width} height={height} class={imageClass} style={imageStyle} loading={loading} decoding="async"/>}
 </div>

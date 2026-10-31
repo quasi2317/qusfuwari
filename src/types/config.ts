@@ -104,6 +104,7 @@ export type ExpressiveCodeConfig = {
 export interface BackgroundConfig {
 	enable: boolean;
 	src: string;
+	animationSrc?: string;
 	position: "top" | "center" | "bottom";
 	size: "cover" | "contain" | "auto";
 	repeat: "no-repeat" | "repeat" | "repeat-x" | "repeat-y";

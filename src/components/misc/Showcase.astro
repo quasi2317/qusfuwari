@@ -1,4 +1,7 @@
 ---
+import ImageWrapper from "./ImageWrapper.astro";
+import thumbnailManifest from "../../assets/showcase-thumbnails/manifest.json";
+const thumbnails: Record<string, string | null> = thumbnailManifest;
 interface ShowcaseItem {
 	title: string;
 	image?: string;
@@ -26,18 +29,20 @@ const { title, items } = Astro.props;
         <div
           class="showcase-image-wrapper relative overflow-hidden cursor-pointer group"
           data-sc-title={item.title}
-          data-sc-image={item.image || ''}
+          data-sc-image={item.image && thumbnails[item.image] !== null ? item.image : ''}
           data-sc-desc={item.description}
           data-sc-details={item.details || ''}
           data-sc-link={item.link || ''}
         >
           <div class="w-full aspect-[4/3]">
-            {item.image ? (
-              <img 
-                src={item.image} 
+            {item.image && thumbnails[item.image] !== null ? (
+              <ImageWrapper
+                src={thumbnails[item.image] || item.image}
                 alt={item.title}
-                referrerpolicy="no-referrer"
-                class="w-full h-full object-cover block transition-transform duration-500 group-hover:scale-110"
+                loading="lazy"
+                width={640}
+                height={480}
+                class="w-full h-full block transition-transform duration-500 group-hover:scale-110"
               />
             ) : (
               <div class="showcase-placeholder w-full h-full flex items-center justify-center p-4">
@@ -78,7 +83,7 @@ const { title, items } = Astro.props;
       <!-- 图片和内容合并区域 -->
       <div class="modal-image-content-wrapper">
         <!-- 背景图片 -->
-        <img id="modal-image" src="" alt="" class="modal-image" referrerpolicy="no-referrer" />
+        <img id="modal-image" alt="" class="modal-image" referrerpolicy="no-referrer" />
         
         <!-- 渐变遮罩 - 让下半部分变暗以便显示文字 -->
         <div class="modal-overlay"></div>
@@ -477,6 +482,7 @@ const { title, items } = Astro.props;
     const modal = document.getElementById('showcase-modal');
     if (modal) {
       modal.classList.add('hidden');
+      modal.querySelector<HTMLImageElement>('#modal-image')?.removeAttribute('src');
       document.body.style.overflow = '';
     }
   }
@@ -509,5 +515,17 @@ const { title, items } = Astro.props;
   }
 
   document.addEventListener('astro:page-load', initShowcase);
+  let hooksBound = false;
+  function setupShowcaseHooks() {
+    if (hooksBound || !window.swup?.hooks) return;
+    hooksBound = true;
+    window.swup.hooks.on('visit:start', () => {
+      closeShowcaseModal();
+      document.querySelectorAll('[id="showcase-modal"]').forEach(modal => modal.remove());
+    });
+    window.swup.hooks.on('page:view', initShowcase);
+  }
+  if (window.swup?.hooks) setupShowcaseHooks();
+  else document.addEventListener('swup:enable', setupShowcaseHooks, { once: true });
 </script>
 
